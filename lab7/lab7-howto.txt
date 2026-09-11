@@ -1,0 +1,39 @@
+Лабораторная работа №7 (Java + MPJ Express)
+Умножение матриц парными MPI-операциями: Send/Recv и Isend/Irecv.
+
+Быстрый запуск на одной машине (для отладки):
+  run-lab7.bat blocking 512 4
+  run-lab7.bat nonblocking 512 4
+
+Замер времени (размер ~10..50 сек, зависит от CPU):
+  run-lab7.bat blocking 3072 4 8
+  run-lab7.bat nonblocking 3072 4 8
+
+Аргументы: mode n np strips
+  mode   - blocking | nonblocking
+  n      - размер квадратной матрицы
+  np     - число процессов (для сдачи минимум 3)
+  strips - число полос на процесс (конвейер, как CUDA Streams)
+
+Сдача на 3 компьютерах (cluster, niodev):
+1. Скопируйте проект на все машины. Пути и Java должны совпадать.
+2. Заполните machines своими IP (см. machines.example).
+3. На каждой машине:
+     set MPJ_HOME=<проект>\lib\mpj-v0_44
+     mpjdaemon.bat -boot
+4. На машине-мастере:
+     mvn -q compile
+     mpjrun.bat -np 3 -dev niodev -machinesfile machines -cp target\classes org.example.lab7.Lab7App nonblocking 3072 8
+5. После работы: mpjdaemon.bat -halt на каждой машине.
+
+Linux/macOS: run-lab7.sh, mpjboot machines, mpjrun.sh, mpjhalt machines.
+
+Неблокирующий режим специально устроен как CUDA Streams + cudaMemcpyAsync:
+пока идёт передача полосы i+1, считается полоса i, результат полосы i уходит Isend.
+
+Ответы на вопросы:
+1. MPI_COMM_WORLD — коммуникатор по умолчанию, в него входят все процессы запуска.
+2. rank — номер процесса в коммуникаторе, от 0 до size-1.
+3. Программа начинается с MPI.Init и заканчивается MPI.Finalize.
+4. Асинхронные Isend/Irecv позволяют перекрывать передачу данных счётом
+   (как cudaMemcpyAsync и ядро в разных CUDA streams), поэтому простой на сети меньше.

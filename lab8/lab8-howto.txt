@@ -1,0 +1,42 @@
+Лабораторная работа №8 (Java + MPJ Express)
+MPI: коллективные операции, группы процессов и файловый ввод/вывод.
+
+Программа:
+1. Умножение матриц парными операциями из ЛР №7 (Send/Recv или Isend/Irecv).
+2. То же умножение коллективными операциями на COMM_WORLD (Bcast, Scatterv, Gatherv).
+3. Случайное разбиение процессов на K групп (Group.Incl + Comm.Split).
+4. Каждая группа читает свою порцию A.bin и B.bin, собирает B через Allgatherv,
+   умножает строки и пишет результат в файл группы group-<id>-C.bin.
+
+Быстрый запуск на одной машине:
+  run-lab8.bat
+  run-lab8.bat 2 256 nonblocking 4
+  run-lab8.bat 3 1024 blocking 6
+
+Аргументы: groups n mode np strips [datadir]
+  groups  - число MPI-групп (не больше числа процессов)
+  n       - размер квадратной матрицы
+  mode    - blocking | nonblocking  (парный режим ЛР №7)
+  np      - число процессов (для сдачи минимум 3)
+  strips  - полосы для парного режима
+  datadir - общий каталог файлов (для кластера — сетевой диск)
+
+Замер ~10..50 сек (зависит от CPU):
+  run-lab8.bat 2 2048 nonblocking 4
+
+Сдача на 3 компьютерах (cluster, niodev):
+1. Скопируйте проект на все машины. Пути и Java должны совпадать.
+2. Каталог datadir должен быть общим по сети (SMB/NFS), иначе узлы не увидят A.bin/B.bin.
+3. Заполните machines своими IP (см. machines.example).
+4. На каждой машине:
+     set MPJ_HOME=<проект>\lib\mpj-v0_44
+     mpjdaemon.bat -boot
+5. На машине-мастере:
+     mvn -q compile
+     mpjrun.bat -np 6 -dev niodev -machinesfile machines -cp target\classes org.example.lab8.Lab8App 2 1024 nonblocking 8 \\server\share\lab8
+6. После работы: mpjdaemon.bat -halt на каждой машине.
+
+Linux/macOS: run-lab8.sh, mpjboot machines, mpjrun.sh, mpjhalt machines.
+
+Необязательно (PBS Torque):
+  qsub pbs-lab8.sh
