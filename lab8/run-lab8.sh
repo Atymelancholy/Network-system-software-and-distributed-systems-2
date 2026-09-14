@@ -14,4 +14,4 @@ echo "MPJ_HOME=$MPJ_HOME"
 echo "groups=$GROUPS n=$N mode=$MODE np=$NP strips=$STRIPS datadir=$DATADIR"
 
 mvn -q -f "$ROOT/pom.xml" compile || exit 1
-java "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" "-Dstderr.encoding=UTF-8" -jar "$MPJ_HOME/lib/starter.jar" -np "$NP" -cp "$ROOT/target/classes" org.example.lab8.Lab8App "$GROUPS" "$N" "$MODE" "$STRIPS" "$DATADIR"
+java -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -jar "$MPJ_HOME/lib/starter.jar" -np "$NP" -cp "$ROOT/target/classes" -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 org.example.lab8.Lab8App "$GROUPS" "$N" "$MODE" "$STRIPS" "$DATADIR"

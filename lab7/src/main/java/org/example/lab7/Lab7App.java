@@ -55,11 +55,11 @@ public final class Lab7App {
         }
         System.out.println("MPI COMM_WORLD size = " + size
                 + ", host = " + MPI.Get_processor_name());
-        System.out.println("Режим: " + settings.modeName());
-        System.out.println("Матрица: " + settings.n + " x " + settings.n);
-        System.out.println("Полос на процесс: " + settings.strips);
+        System.out.println("Mode: " + settings.modeName());
+        System.out.println("Matrix: " + settings.n + " x " + settings.n);
+        System.out.println("Strips per process: " + settings.strips);
         if (size < 3) {
-            System.out.println("Для сдачи ЛР запускайте минимум на 3 процессах (-np 3) и 3 компьютерах.");
+            System.out.println("For the lab defense run at least 3 processes on 3 computers.");
         }
     }
 
@@ -76,8 +76,8 @@ public final class Lab7App {
         }
         double gflops = elapsed > 0 ? 2.0 * settings.n * settings.n * settings.n / elapsed / 1e9 : 0.0;
         boolean ok = MatrixUtils.sampleMatches(a, b, c, settings.n, 4);
-        System.out.printf("Время: %.3f с%n", elapsed);
-        System.out.printf("Производительность: %.3f GFLOPS%n", gflops);
-        System.out.println("Проверка: " + (ok ? "OK" : "ОШИБКА"));
+        System.out.printf("Time: %.3f s%n", elapsed);
+        System.out.printf("Performance: %.3f GFLOPS%n", gflops);
+        System.out.println("Check: " + (ok ? "OK" : "FAILED"));
     }
 }

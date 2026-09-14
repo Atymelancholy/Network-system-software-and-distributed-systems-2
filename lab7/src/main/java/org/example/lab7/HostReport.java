@@ -18,7 +18,7 @@ final class HostReport {
             MPI.COMM_WORLD.Send(name, 0, MAX_NAME, MPI.CHAR, 0, TAG);
             return;
         }
-        System.out.println("Узлы:");
+        System.out.println("Hosts:");
         System.out.println("  rank 0: " + trimName(name));
         char[] incoming = new char[MAX_NAME];
         for (int source = 1; source < size; source++) {

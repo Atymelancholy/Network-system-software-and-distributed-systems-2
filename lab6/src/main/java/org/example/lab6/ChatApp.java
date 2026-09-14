@@ -7,6 +7,8 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class ChatApp {
@@ -14,6 +16,7 @@ public final class ChatApp {
     private final UdpChannel channel;
     private final PeerDirectory peers = new PeerDirectory();
     private final PacketDeduper deduper = new PacketDeduper();
+    private final Set<String> announced = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Object consoleLock = new Object();
 
@@ -104,35 +107,46 @@ public final class ChatApp {
     void ignoreLocally(String ip) {
         String target = normalizeIp(ip);
         if (target == null) {
-            println("Некорректный IP");
+            println("Некорректный IP. Пример: /ignore 192.168.0.121");
             return;
         }
-        peers.ignore(target);
+        if (!peers.ignore(target)) {
+            println("Уже в локальном игноре: " + target + ". Сообщения от него скрыты.");
+            return;
+        }
         peers.remove(target);
-        println("Локально игнорируется: " + target);
+        println("Локальный игнор включён для " + target);
+        println("Его сообщения и HELLO больше не показываются. Проверка: пусть напишет текст.");
+        println("Это только у вас. Чтобы игнор был у всех: /kick " + target);
     }
 
     void kick(String ip) {
         String target = normalizeIp(ip);
         if (target == null) {
-            println("Некорректный IP");
+            println("Некорректный IP. Пример: /kick 192.168.0.121");
             return;
         }
         peers.ignore(target);
         peers.remove(target);
         sendControl(PacketType.IGNORE, target);
-        println("Разослан принудительный игнор для " + target);
+        println("Принудительный игнор разослан всем: " + target);
+        println("Не пишите /unignore сразу. Пусть " + target + " отправит сообщение — у вас его не должно быть.");
     }
 
     void unignore(String ip) {
         String target = normalizeIp(ip);
         if (target == null) {
-            println("Некорректный IP");
+            println("Некорректный IP. Пример: /unignore 192.168.0.121");
             return;
         }
-        peers.unignore(target);
+        boolean wasIgnored = peers.unignore(target);
         sendControl(PacketType.UNIGNORE, target);
-        println("Снят игнор с " + target);
+        if (wasIgnored) {
+            println("Игнор снят с " + target + " (у вас и рассылка остальным)");
+            println("Подождите 2 секунды и проверьте /peers — он должен появиться снова.");
+            return;
+        }
+        println("Этот IP и так не был в игноре: " + target);
     }
 
     void printPeers() {
@@ -222,10 +236,8 @@ public final class ChatApp {
     }
 
     private void dispatch(Packet packet, String fromIp) {
-        boolean firstSeen = peers.activePeers().stream()
-                .noneMatch(peer -> peer.ip().equals(fromIp));
         peers.touch(fromIp, packet.nick());
-        if (firstSeen && packet.type() != PacketType.BYE) {
+        if (announced.add(fromIp) && packet.type() != PacketType.BYE) {
             printEvent(packet, fromIp, "в сети");
         }
         switch (packet.type()) {

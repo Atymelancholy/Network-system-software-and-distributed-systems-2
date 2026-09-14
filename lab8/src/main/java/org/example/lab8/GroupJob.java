@@ -28,11 +28,11 @@ final class GroupJob {
         double[] localA = DoublesFile.readRows(settings.fileA(), n, range);
         double[] localB = DoublesFile.readRows(settings.fileB(), n, range);
         comm.Barrier();
-        double started = MPI.Wtime();
+        long started = System.nanoTime();
         double[] fullB = CollectiveMultiply.assembleMatrix(comm, localB, n);
         double[] localC = CollectiveMultiply.multiplyLocal(localA, fullB, range, n);
         comm.Barrier();
-        double elapsed = MPI.Wtime() - started;
+        double elapsed = (System.nanoTime() - started) / 1e9;
         DoublesFile.writeRows(settings.groupResult(groupId), n, range, localC);
         boolean ok = MatrixUtils.packedSampleMatches(localA, fullB, localC, range.count, n);
         ok = reduceOk(comm, ok);

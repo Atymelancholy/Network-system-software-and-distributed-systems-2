@@ -13,6 +13,7 @@ public final class ConsoleUi {
     public void run() {
         try (Scanner scanner = new Scanner(System.in)) {
             while (true) {
+                System.out.print("> ");
                 if (!scanner.hasNextLine()) {
                     return;
                 }

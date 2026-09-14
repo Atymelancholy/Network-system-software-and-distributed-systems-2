@@ -16,7 +16,7 @@ final class LabSettings {
         int n = args.length > 1 ? Integer.parseInt(args[1]) : Lab7App.DEFAULT_N;
         int strips = args.length > 2 ? Integer.parseInt(args[2]) : Lab7App.DEFAULT_STRIPS;
         if (n <= 0 || strips <= 0) {
-            throw new IllegalArgumentException("Размер матрицы и число полос должны быть > 0");
+            throw new IllegalArgumentException("Matrix size and strip count must be > 0");
         }
         return new LabSettings(blocking, n, strips);
     }
@@ -27,6 +27,6 @@ final class LabSettings {
     }
 
     String modeName() {
-        return blocking ? "блокирующий (Send/Recv)" : "неблокирующий (Isend/Irecv, CUDA Streams)";
+        return blocking ? "blocking (Send/Recv)" : "non-blocking (Isend/Irecv, CUDA Streams)";
     }
 }
