@@ -13,6 +13,9 @@ record IpPacket(
         byte[] payload
 ) {
     static IpPacket parse(byte[] raw, int length) {
+        if (length < 20) {
+            throw new IllegalArgumentException("IP-пакет слишком короткий");
+        }
         int headerLength = (raw[0] & 0x0F) * 4;
         int ttl = raw[8] & 0xFF;
         int protocol = raw[9] & 0xFF;
@@ -20,6 +23,12 @@ record IpPacket(
         InetAddress destination = addressAt(raw, 16);
         byte[] payload = Arrays.copyOfRange(raw, headerLength, length);
         return new IpPacket(headerLength, ttl, protocol, source, destination, payload);
+    }
+
+    static IpPacket wrapIcmp(InetAddress source, byte[] icmp) {
+        InetAddress any = addressAt(new byte[4], 0);
+        InetAddress from = source == null ? any : source;
+        return new IpPacket(0, 0, 1, from, any, icmp);
     }
 
     private static InetAddress addressAt(byte[] raw, int offset) {

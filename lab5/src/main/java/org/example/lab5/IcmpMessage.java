@@ -1,5 +1,6 @@
 package org.example.lab5;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -20,6 +21,9 @@ record IcmpMessage(int type, int code, int identifier, int sequence, byte[] payl
     }
 
     static IcmpMessage parse(byte[] icmp) {
+        if (icmp.length < 8) {
+            throw new IllegalArgumentException("ICMP-сообщение слишком короткое");
+        }
         int type = icmp[0] & 0xFF;
         int code = icmp[1] & 0xFF;
         EchoFields fields = readFields(type, icmp);
@@ -50,6 +54,20 @@ record IcmpMessage(int type, int code, int identifier, int sequence, byte[] payl
 
     boolean isDestinationUnreachable() {
         return type == IcmpTypes.DESTINATION_UNREACHABLE;
+    }
+
+    InetAddress embeddedDestination() {
+        if (!isTimeExceeded() && !isDestinationUnreachable()) {
+            return null;
+        }
+        if (payload.length < 20) {
+            return null;
+        }
+        try {
+            return IpPacket.parse(payload, payload.length).destination();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private static EchoFields readFields(int type, byte[] icmp) {
