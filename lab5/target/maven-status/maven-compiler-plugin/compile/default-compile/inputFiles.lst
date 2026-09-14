@@ -7,10 +7,13 @@ C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-softwa
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\IcmpMessage.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\IcmpTypes.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\IpPacket.java
+C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\IPv4Datagram.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\LabOptions.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\NativeSockets.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\PingWorker.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\ReceivedDatagram.java
+C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\SmurfRunner.java
+C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\SmurfWorker.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\SockaddrIn.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\lab5\TracerouteWorker.java
 C:\Users\alsan\OneDrive\Документы\GitHub\Asanko06\Network-system-software-and-distributed-systems-2\lab5\src\main\java\org\example\Main.java

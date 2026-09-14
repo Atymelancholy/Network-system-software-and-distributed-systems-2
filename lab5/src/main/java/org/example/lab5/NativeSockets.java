@@ -25,10 +25,15 @@ final class NativeSockets implements AutoCloseable {
     private static final int SIO_RCVALL = 0x98000001;
     private static final int RCVALL_ON = 1;
     private static final int RCVALL_IPLEVEL = 3;
+    private static final int SOL_SOCKET = 0xFFFF;
+    private static final int SO_BROADCAST = 0x0020;
+    private static final int IPPROTO_RAW = 255;
 
     private final boolean windows = Platform.isWindows();
     private int posixFd = -1;
+    private int posixSmurfFd = -1;
     private Pointer windowsSendSocket;
+    private Pointer windowsSmurfSocket;
     private final List<Pointer> windowsRecvSockets = new ArrayList<>();
     private int windowsRecvIndex;
 
@@ -37,6 +42,40 @@ final class NativeSockets implements AutoCloseable {
         sockets.createRawIcmpSocket();
         sockets.enableNonBlocking();
         return sockets;
+    }
+
+    static NativeSockets openSmurf() {
+        NativeSockets sockets = new NativeSockets();
+        sockets.createSmurfSocket();
+        return sockets;
+    }
+
+    void sendSmurfDatagram(byte[] datagram, InetAddress broadcast) {
+        SockaddrIn address = destinationAddress(broadcast);
+        address.write();
+        int sent;
+        if (windows) {
+            sent = Winsock.INSTANCE.sendto(
+                    windowsSmurfSocket,
+                    datagram,
+                    datagram.length,
+                    0,
+                    address,
+                    address.size()
+            );
+        } else {
+            sent = Posix.INSTANCE.sendto(
+                    posixSmurfFd,
+                    datagram,
+                    datagram.length,
+                    0,
+                    address,
+                    address.size()
+            );
+        }
+        if (sent < 0) {
+            throw new IcmpException("Ошибка sendto (smurf): " + lastError());
+        }
     }
 
     void setTtl(int ttl) {
@@ -67,6 +106,8 @@ final class NativeSockets implements AutoCloseable {
         if (windows) {
             closeWindows(windowsSendSocket);
             windowsSendSocket = null;
+            closeWindows(windowsSmurfSocket);
+            windowsSmurfSocket = null;
             for (Pointer socket : windowsRecvSockets) {
                 closeWindows(socket);
             }
@@ -76,6 +117,10 @@ final class NativeSockets implements AutoCloseable {
         if (posixFd >= 0) {
             Posix.INSTANCE.close(posixFd);
             posixFd = -1;
+        }
+        if (posixSmurfFd >= 0) {
+            Posix.INSTANCE.close(posixSmurfFd);
+            posixSmurfFd = -1;
         }
     }
 
@@ -146,6 +191,22 @@ final class NativeSockets implements AutoCloseable {
             return;
         }
         createPosixSocket();
+    }
+
+    private void createSmurfSocket() {
+        if (windows) {
+            ensureWinsockStarted();
+            windowsSmurfSocket = openWindowsSocket(IPPROTO_ICMP, "Smurf (IP_HDRINCL)");
+            requireSocketOption(windowsSmurfSocket, IPPROTO_IP, ipHdrInclOption(), 1, "IP_HDRINCL");
+            requireSocketOption(windowsSmurfSocket, SOL_SOCKET, SO_BROADCAST, 1, "SO_BROADCAST");
+            return;
+        }
+        posixSmurfFd = Posix.INSTANCE.socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+        if (posixSmurfFd < 0) {
+            throw new IcmpException("Не удалось создать raw-сокет Smurf (IPPROTO_RAW). "
+                    + "Нужен root/cap_net_raw. Код: " + lastError());
+        }
+        requirePosixOption(posixSmurfFd, SOL_SOCKET, SO_BROADCAST, 1, "SO_BROADCAST");
     }
 
     private void createWindowsSocket() {
@@ -289,6 +350,33 @@ final class NativeSockets implements AutoCloseable {
             return 4;
         }
         return 2;
+    }
+
+    private int ipHdrInclOption() {
+        if (windows) {
+            return 2;
+        }
+        return 3;
+    }
+
+    private void requireSocketOption(Pointer socket, int level, int option, int value, String name) {
+        if (setIntOption(socket, level, option, value)) {
+            return;
+        }
+        throw new IcmpException("setsockopt(" + name + ") не удался: " + lastError());
+    }
+
+    private void requirePosixOption(int fd, int level, int option, int value, String name) {
+        byte[] bytes = intBytes(value);
+        if (Posix.INSTANCE.setsockopt(fd, level, option, bytes, bytes.length) == 0) {
+            return;
+        }
+        throw new IcmpException("setsockopt(" + name + ") не удался: " + lastError());
+    }
+
+    private boolean setIntOption(Pointer socket, int level, int option, int value) {
+        byte[] bytes = intBytes(value);
+        return Winsock.INSTANCE.setsockopt(socket, level, option, bytes, bytes.length) == 0;
     }
 
     private int posixGetFl() {

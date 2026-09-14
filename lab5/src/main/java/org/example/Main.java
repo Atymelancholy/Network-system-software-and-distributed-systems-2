@@ -4,6 +4,7 @@ import org.example.lab5.IcmpChannel;
 import org.example.lab5.IcmpException;
 import org.example.lab5.LabOptions;
 import org.example.lab5.PingWorker;
+import org.example.lab5.SmurfRunner;
 import org.example.lab5.TracerouteWorker;
 
 import java.io.FileDescriptor;
@@ -23,9 +24,21 @@ public class Main {
             System.err.println(e.getMessage());
             return;
         }
+        if (options.mode.equals("smurf")) {
+            runSmurf(options);
+            return;
+        }
         try (IcmpChannel channel = IcmpChannel.open()) {
             List<Thread> workers = startWorkers(channel, options);
             joinAll(workers);
+        } catch (IcmpException e) {
+            System.err.println(e.getMessage());
+        }
+    }
+
+    private static void runSmurf(LabOptions options) {
+        try {
+            SmurfRunner.run(options);
         } catch (IcmpException e) {
             System.err.println(e.getMessage());
         }
