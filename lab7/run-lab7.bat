@@ -16,8 +16,7 @@ if "%STRIPS%"=="" set "STRIPS=8"
 echo MPJ_HOME=%MPJ_HOME%
 echo mode=%MODE% n=%N% np=%NP% strips=%STRIPS%
 
-chcp 65001 >nul
 call mvn -q -f "%ROOT%pom.xml" compile
 if errorlevel 1 exit /b 1
 
-java "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" "-Dstderr.encoding=UTF-8" -jar "%MPJ_HOME%\lib\starter.jar" -np %NP% -cp "%ROOT%target\classes" org.example.lab7.Lab7App %MODE% %N% %STRIPS%
+java -jar "%MPJ_HOME%\lib\starter.jar" -np %NP% -cp "%ROOT%target\classes" org.example.lab7.Lab7App %MODE% %N% %STRIPS%

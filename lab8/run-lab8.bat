@@ -24,4 +24,4 @@ chcp 65001 >nul
 call mvn -q -f "%ROOT%pom.xml" compile
 if errorlevel 1 exit /b 1
 
-java "-Dfile.encoding=UTF-8" "-Dstdout.encoding=UTF-8" "-Dstderr.encoding=UTF-8" -jar "%MPJ_HOME%\lib\starter.jar" -np %NP% -cp "%ROOT%target\classes" org.example.lab8.Lab8App %GROUPS% %N% %MODE% %STRIPS% %DATADIR%
+java -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -jar "%MPJ_HOME%\lib\starter.jar" -np %NP% -cp "%ROOT%target\classes" -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 org.example.lab8.Lab8App %GROUPS% %N% %MODE% %STRIPS% %DATADIR%
