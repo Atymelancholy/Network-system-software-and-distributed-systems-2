@@ -6,14 +6,16 @@ import org.example.lab5.LabOptions;
 import org.example.lab5.PingWorker;
 import org.example.lab5.TracerouteWorker;
 
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Main {
     public static void main(String[] args) {
-        useUtf8Console();
+        useWindowsOemConsole();
         LabOptions options;
         try {
             options = LabOptions.parse(args);
@@ -29,9 +31,13 @@ public class Main {
         }
     }
 
-    private static void useUtf8Console() {
-        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
-        System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
+    private static void useWindowsOemConsole() {
+        if (!System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            return;
+        }
+        Charset oem = Charset.forName("IBM866");
+        System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out), true, oem));
+        System.setErr(new PrintStream(new FileOutputStream(FileDescriptor.err), true, oem));
     }
 
     private static List<Thread> startWorkers(IcmpChannel channel, LabOptions options) {

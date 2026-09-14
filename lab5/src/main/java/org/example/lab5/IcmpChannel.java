@@ -1,6 +1,9 @@
 package org.example.lab5;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 
 public final class IcmpChannel implements AutoCloseable {
@@ -10,6 +13,7 @@ public final class IcmpChannel implements AutoCloseable {
     private final NativeSockets sockets;
     private final Object sendLock = new Object();
     private final Object recvLock = new Object();
+    private final List<ReceivedDatagram> inbox = new ArrayList<>();
 
     public static IcmpChannel open() {
         return new IcmpChannel(NativeSockets.openRawIcmp());
@@ -27,10 +31,10 @@ public final class IcmpChannel implements AutoCloseable {
         }
     }
 
-    Optional<ReceivedDatagram> receiveFor(int identifier, long deadlineMillis) {
+    Optional<ReceivedDatagram> receiveFor(int identifier, InetAddress target, long deadlineMillis) {
         byte[] buffer = new byte[BUFFER_SIZE];
         while (System.currentTimeMillis() < deadlineMillis) {
-            Optional<ReceivedDatagram> matched = peekAndTakeIfMine(buffer, identifier);
+            Optional<ReceivedDatagram> matched = takeMatching(buffer, identifier, target);
             if (matched.isPresent()) {
                 return matched;
             }
@@ -39,31 +43,37 @@ public final class IcmpChannel implements AutoCloseable {
         return Optional.empty();
     }
 
-    private Optional<ReceivedDatagram> peekAndTakeIfMine(byte[] buffer, int identifier) {
+    private Optional<ReceivedDatagram> takeMatching(byte[] buffer, int identifier, InetAddress target) {
         synchronized (recvLock) {
-            NativeSockets.RecvResult peeked = sockets.recv(buffer, NativeSockets.MSG_PEEK);
-            if (!peeked.ok()) {
-                return Optional.empty();
+            drainSocket(buffer);
+            Iterator<ReceivedDatagram> iterator = inbox.iterator();
+            while (iterator.hasNext()) {
+                ReceivedDatagram datagram = iterator.next();
+                if (datagram.belongsTo(identifier, target)) {
+                    iterator.remove();
+                    return Optional.of(datagram);
+                }
             }
-            ReceivedDatagram datagram = parseOrNull(buffer, peeked.length());
-            if (datagram == null || !datagram.isIcmpResponse()) {
-                sockets.recv(buffer, 0);
-                return Optional.empty();
-            }
-            if (!datagram.belongsTo(identifier)) {
-                return Optional.empty();
-            }
-            NativeSockets.RecvResult consumed = sockets.recv(buffer, 0);
-            if (!consumed.ok()) {
-                return Optional.empty();
-            }
-            return Optional.ofNullable(parseOrNull(buffer, consumed.length()));
+            return Optional.empty();
         }
     }
 
-    private static ReceivedDatagram parseOrNull(byte[] buffer, int length) {
+    private void drainSocket(byte[] buffer) {
+        for (int i = 0; i < 512; i++) {
+            NativeSockets.RecvResult received = sockets.recv(buffer);
+            if (!received.ok()) {
+                return;
+            }
+            ReceivedDatagram datagram = parseOrNull(buffer, received.length(), received.source());
+            if (datagram != null && datagram.isIcmpResponse()) {
+                inbox.add(datagram);
+            }
+        }
+    }
+
+    private static ReceivedDatagram parseOrNull(byte[] buffer, int length, InetAddress from) {
         try {
-            return ReceivedDatagram.parse(buffer, length);
+            return ReceivedDatagram.parse(buffer, length, from);
         } catch (RuntimeException ignored) {
             return null;
         }

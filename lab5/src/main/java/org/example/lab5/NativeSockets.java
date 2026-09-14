@@ -7,13 +7,16 @@ import com.sun.jna.Platform;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 final class NativeSockets implements AutoCloseable {
-    static final int MSG_PEEK = 0x2;
-
     private static final int AF_INET = 2;
     private static final int SOCK_RAW = 3;
     private static final int IPPROTO_ICMP = 1;
@@ -21,11 +24,13 @@ final class NativeSockets implements AutoCloseable {
 
     private static final int SIO_RCVALL = 0x98000001;
     private static final int RCVALL_ON = 1;
+    private static final int RCVALL_IPLEVEL = 3;
 
     private final boolean windows = Platform.isWindows();
     private int posixFd = -1;
     private Pointer windowsSendSocket;
-    private Pointer windowsRecvSocket;
+    private final List<Pointer> windowsRecvSockets = new ArrayList<>();
+    private int windowsRecvIndex;
 
     static NativeSockets openRawIcmp() {
         NativeSockets sockets = new NativeSockets();
@@ -50,29 +55,82 @@ final class NativeSockets implements AutoCloseable {
         }
     }
 
-    RecvResult recv(byte[] buffer, int flags) {
-        SockaddrIn from = new SockaddrIn();
-        IntByReference fromLen = new IntByReference(from.size());
-        int received = invokeRecvFrom(buffer, flags, from, fromLen);
-        if (received < 0) {
-            return RecvResult.empty(isWouldBlock());
+    RecvResult recv(byte[] buffer) {
+        if (windows) {
+            return recvWindows(buffer);
         }
-        from.read();
-        return new RecvResult(received, false);
+        return recvFromPosix(buffer);
     }
 
     @Override
     public void close() {
         if (windows) {
             closeWindows(windowsSendSocket);
-            closeWindows(windowsRecvSocket);
             windowsSendSocket = null;
-            windowsRecvSocket = null;
+            for (Pointer socket : windowsRecvSockets) {
+                closeWindows(socket);
+            }
+            windowsRecvSockets.clear();
             return;
         }
         if (posixFd >= 0) {
             Posix.INSTANCE.close(posixFd);
             posixFd = -1;
+        }
+    }
+
+    private RecvResult recvWindows(byte[] buffer) {
+        List<Pointer> sockets = windowsReadSockets();
+        if (sockets.isEmpty()) {
+            return RecvResult.empty();
+        }
+        for (int i = 0; i < sockets.size(); i++) {
+            int index = (windowsRecvIndex + i) % sockets.size();
+            RecvResult result = recvFromWindows(sockets.get(index), buffer);
+            if (result.ok()) {
+                windowsRecvIndex = (index + 1) % sockets.size();
+                return result;
+            }
+        }
+        return RecvResult.empty();
+    }
+
+    private List<Pointer> windowsReadSockets() {
+        List<Pointer> sockets = new ArrayList<>();
+        if (windowsSendSocket != null) {
+            sockets.add(windowsSendSocket);
+        }
+        sockets.addAll(windowsRecvSockets);
+        return sockets;
+    }
+
+    private RecvResult recvFromWindows(Pointer socket, byte[] buffer) {
+        SockaddrIn from = new SockaddrIn();
+        IntByReference fromLen = new IntByReference(from.size());
+        int received = Winsock.INSTANCE.recvfrom(socket, buffer, buffer.length, 0, from, fromLen);
+        if (received < 0) {
+            return RecvResult.empty();
+        }
+        from.read();
+        return new RecvResult(received, inetFrom(from));
+    }
+
+    private RecvResult recvFromPosix(byte[] buffer) {
+        SockaddrIn from = new SockaddrIn();
+        IntByReference fromLen = new IntByReference(from.size());
+        int received = Posix.INSTANCE.recvfrom(posixFd, buffer, buffer.length, 0, from, fromLen);
+        if (received < 0) {
+            return RecvResult.empty();
+        }
+        from.read();
+        return new RecvResult(received, inetFrom(from));
+    }
+
+    private static InetAddress inetFrom(SockaddrIn from) {
+        try {
+            return InetAddress.getByAddress(from.addressBytes());
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
@@ -93,9 +151,14 @@ final class NativeSockets implements AutoCloseable {
     private void createWindowsSocket() {
         ensureWinsockStarted();
         windowsSendSocket = openWindowsSocket(IPPROTO_ICMP, "отправки ICMP");
-        windowsRecvSocket = openWindowsSocket(IPPROTO_IP, "приёма IP");
-        bindReceiveSocket();
-        enableReceiveAll();
+        for (InetAddress local : localIpv4Addresses()) {
+            Pointer socket = openWindowsSocket(IPPROTO_IP, "приёма IP");
+            if (bindTo(socket, local) && enableReceiveAll(socket)) {
+                windowsRecvSockets.add(socket);
+            } else {
+                closeWindows(socket);
+            }
+        }
     }
 
     private Pointer openWindowsSocket(int protocol, String role) {
@@ -107,24 +170,24 @@ final class NativeSockets implements AutoCloseable {
         return socket;
     }
 
-    private void bindReceiveSocket() {
-        InetAddress local = localIpv4();
+    private boolean bindTo(Pointer socket, InetAddress local) {
         SockaddrIn address = new SockaddrIn();
         address.setFamily(AF_INET);
         address.setAddress(local.getAddress());
         address.write();
-        int result = Winsock.INSTANCE.bind(windowsRecvSocket, address, address.size());
-        if (result != 0) {
-            throw new IcmpException("bind(" + local.getHostAddress() + ") не удался: " + lastError());
-        }
+        return Winsock.INSTANCE.bind(socket, address, address.size()) == 0;
     }
 
-    private void enableReceiveAll() {
+    private boolean enableReceiveAll(Pointer socket) {
+        return wsaIoctlRcvall(socket, RCVALL_ON) || wsaIoctlRcvall(socket, RCVALL_IPLEVEL);
+    }
+
+    private boolean wsaIoctlRcvall(Pointer socket, int modeValue) {
         Memory mode = new Memory(4);
-        mode.setInt(0, RCVALL_ON);
+        mode.setInt(0, modeValue);
         IntByReference bytesReturned = new IntByReference();
-        int result = Winsock.INSTANCE.WSAIoctl(
-                windowsRecvSocket,
+        return Winsock.INSTANCE.WSAIoctl(
+                socket,
                 SIO_RCVALL,
                 mode,
                 4,
@@ -133,14 +196,31 @@ final class NativeSockets implements AutoCloseable {
                 bytesReturned,
                 Pointer.NULL,
                 Pointer.NULL
-        );
-        if (result != 0) {
-            throw new IcmpException("Не удалось включить приём ICMP Time Exceeded (SIO_RCVALL): "
-                    + lastError() + ". Нужны права администратора.");
-        }
+        ) == 0;
     }
 
-    private static InetAddress localIpv4() {
+    private static List<InetAddress> localIpv4Addresses() {
+        List<InetAddress> addresses = new ArrayList<>();
+        try {
+            for (NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!networkInterface.isUp()) {
+                    continue;
+                }
+                for (InetAddress address : Collections.list(networkInterface.getInetAddresses())) {
+                    if (address instanceof Inet4Address && !address.isLoopbackAddress()) {
+                        addresses.add(address);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (addresses.isEmpty()) {
+            addresses.add(probeDefaultIpv4());
+        }
+        return addresses;
+    }
+
+    private static InetAddress probeDefaultIpv4() {
         try (java.net.DatagramSocket probe = new java.net.DatagramSocket()) {
             probe.connect(InetAddress.getByName("8.8.8.8"), 80);
             InetAddress local = probe.getLocalAddress();
@@ -163,7 +243,9 @@ final class NativeSockets implements AutoCloseable {
     private void enableNonBlocking() {
         if (windows) {
             setNonBlocking(windowsSendSocket);
-            setNonBlocking(windowsRecvSocket);
+            for (Pointer socket : windowsRecvSockets) {
+                setNonBlocking(socket);
+            }
             return;
         }
         int flags = Posix.INSTANCE.fcntl(posixFd, posixGetFl(), 0);
@@ -195,13 +277,6 @@ final class NativeSockets implements AutoCloseable {
         return Posix.INSTANCE.sendto(posixFd, packet, packet.length, 0, address, address.size());
     }
 
-    private int invokeRecvFrom(byte[] buffer, int flags, SockaddrIn from, IntByReference fromLen) {
-        if (windows) {
-            return Winsock.INSTANCE.recvfrom(windowsRecvSocket, buffer, buffer.length, flags, from, fromLen);
-        }
-        return Posix.INSTANCE.recvfrom(posixFd, buffer, buffer.length, flags, from, fromLen);
-    }
-
     private SockaddrIn destinationAddress(InetAddress destination) {
         SockaddrIn address = new SockaddrIn();
         address.setFamily(AF_INET);
@@ -231,14 +306,6 @@ final class NativeSockets implements AutoCloseable {
         return 2048;
     }
 
-    private boolean isWouldBlock() {
-        int error = lastError();
-        if (windows) {
-            return error == 10035;
-        }
-        return error == 11 || error == 35;
-    }
-
     private int lastError() {
         if (windows) {
             return Winsock.INSTANCE.WSAGetLastError();
@@ -262,9 +329,9 @@ final class NativeSockets implements AutoCloseable {
         }
     }
 
-    record RecvResult(int length, boolean empty) {
-        static RecvResult empty(boolean wouldBlock) {
-            return new RecvResult(-1, wouldBlock);
+    record RecvResult(int length, InetAddress source) {
+        static RecvResult empty() {
+            return new RecvResult(-1, null);
         }
 
         boolean ok() {

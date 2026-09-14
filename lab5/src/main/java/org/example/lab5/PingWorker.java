@@ -38,7 +38,7 @@ public final class PingWorker implements Runnable {
         long sentAt = System.currentTimeMillis();
         channel.sendEcho(destination, DEFAULT_TTL, identifier, sequence, sentAt);
         long deadline = sentAt + timeoutMs;
-        Optional<ReceivedDatagram> reply = channel.receiveFor(identifier, deadline);
+        Optional<ReceivedDatagram> reply = channel.receiveFor(identifier, destination, deadline);
         if (reply.isEmpty()) {
             Console.println("Истекло время ожидания ответа от " + host + " seq=" + sequence);
             return;

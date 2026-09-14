@@ -40,7 +40,7 @@ public final class TracerouteWorker implements Runnable {
     private boolean probeHop(InetAddress destination, int identifier, int ttl) {
         long sentAt = System.currentTimeMillis();
         channel.sendEcho(destination, ttl, identifier, ttl, sentAt);
-        Optional<ReceivedDatagram> reply = channel.receiveFor(identifier, sentAt + timeoutMs);
+        Optional<ReceivedDatagram> reply = channel.receiveFor(identifier, destination, sentAt + timeoutMs);
         if (reply.isEmpty()) {
             Console.printf("  %2d  *  превышен интервал ожидания%n", ttl);
             return false;
