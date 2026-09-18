@@ -25,8 +25,6 @@ final class NativeSockets implements AutoCloseable {
     private static final int SIO_RCVALL = 0x98000001;
     private static final int RCVALL_ON = 1;
     private static final int RCVALL_IPLEVEL = 3;
-    private static final int SOL_SOCKET = 0xFFFF;
-    private static final int SO_BROADCAST = 0x0020;
     private static final int IPPROTO_RAW = 255;
 
     private final boolean windows = Platform.isWindows();
@@ -198,7 +196,7 @@ final class NativeSockets implements AutoCloseable {
             ensureWinsockStarted();
             windowsSmurfSocket = openWindowsSocket(IPPROTO_ICMP, "Smurf (IP_HDRINCL)");
             requireSocketOption(windowsSmurfSocket, IPPROTO_IP, ipHdrInclOption(), 1, "IP_HDRINCL");
-            requireSocketOption(windowsSmurfSocket, SOL_SOCKET, SO_BROADCAST, 1, "SO_BROADCAST");
+            requireSocketOption(windowsSmurfSocket, solSocket(), soBroadcast(), 1, "SO_BROADCAST");
             return;
         }
         posixSmurfFd = Posix.INSTANCE.socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
@@ -206,7 +204,8 @@ final class NativeSockets implements AutoCloseable {
             throw new IcmpException("Не удалось создать raw-сокет Smurf (IPPROTO_RAW). "
                     + "Нужен root/cap_net_raw. Код: " + lastError());
         }
-        requirePosixOption(posixSmurfFd, SOL_SOCKET, SO_BROADCAST, 1, "SO_BROADCAST");
+        requirePosixOption(posixSmurfFd, IPPROTO_IP, ipHdrInclOption(), 1, "IP_HDRINCL");
+        requirePosixOption(posixSmurfFd, solSocket(), soBroadcast(), 1, "SO_BROADCAST");
     }
 
     private void createWindowsSocket() {
@@ -357,6 +356,15 @@ final class NativeSockets implements AutoCloseable {
             return 2;
         }
         return 3;
+    }
+
+    // Linux: SOL_SOCKET=1, SO_BROADCAST=6. Windows/macOS: 0xFFFF / 0x0020.
+    private int solSocket() {
+        return Platform.isLinux() ? 1 : 0xFFFF;
+    }
+
+    private int soBroadcast() {
+        return Platform.isLinux() ? 6 : 0x0020;
     }
 
     private void requireSocketOption(Pointer socket, int level, int option, int value, String name) {
