@@ -371,6 +371,21 @@ public class MPJRun {
     peerSockets = new Vector<Socket>();
     clientSocketInit();
 
+    Thread portInfoThread = null;
+    if (!deviceName.equals("mxdev")) {
+      portInfoThread = new Thread(new Runnable() {
+        public void run() {
+          collectPortInfo();
+        }
+      }, "mpj-collect-port-info");
+      portInfoThread.start();
+      try {
+        Thread.sleep(500);
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+      }
+    }
+
     int peersStartingRank = 0;
 
     for (int j = 0; j < peerSockets.size(); j++) {
@@ -408,10 +423,12 @@ public class MPJRun {
     if (DEBUG && logger.isDebugEnabled()) {
       logger.debug("procsPerMachineTable " + procsPerMachineTable);
     }
-    //mxdev does not needs the read/write ports 
-    //so skipping the port information sharing mechanism
-    if(!deviceName.equals("mxdev")){
-      collectPortInfo();
+    if (portInfoThread != null) {
+      try {
+        portInfoThread.join();
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 

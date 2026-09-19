@@ -652,6 +652,26 @@ public class NIODevice implements Device {
    * @return ProcessID[] An array of ProcessIDs.
    */
 
+  private Socket connectWithRetry(String host, int port, int timeoutMs)
+      throws IOException {
+    long deadline = System.currentTimeMillis() + timeoutMs;
+    IOException last = null;
+    while (System.currentTimeMillis() < deadline) {
+      try {
+        return new Socket(host, port);
+      } catch (IOException e) {
+        last = e;
+        try {
+          Thread.sleep(500);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw e;
+        }
+      }
+    }
+    throw last;
+  }
+
   private int bindPort(ServerSocketChannel sock){
     int minPort = 25000;
     int maxPort = 40000;
@@ -882,7 +902,7 @@ public class NIODevice implements Device {
        logger.debug("Connecting to :ServerName "+
                      serverName+" ServerPort "+serverPort);
        
-       clientSock = new Socket(serverName,serverPort);   
+       clientSock = connectWithRetry(serverName, serverPort, 60000); 
        
        logger.debug("Socket Connected "+clientSock.getInetAddress());
        
